@@ -456,9 +456,75 @@ export const IFC_WRITEBACK = {
     "In a full implementation, these values would be written back per element or per system, using element-level mappings and IFC GUID relationships, not only building-level totals."
 };
 
-// 12) Combined context we send to the LLM
+// 12) Quick reference layer (flattened structure for common queries)
+export const BIM_CARBON_CONTEXT_QUICK_REF = {
+  total_embodied_kgco2e: 58936.4,
+  total_embodied_tco2e: 58.9,
+  intensity_kgco2e_per_m2: 282.6,
+  
+  material_contributions: {
+    concrete: { 
+      percent: 78.1, 
+      kgco2e: 46015.4, 
+      quantity_m3: 131.473 
+    },
+    glazing: { 
+      percent: 3.5, 
+      kgco2e: 2085.3, 
+      quantity_m2: 23.17 
+    },
+    doors: { 
+      percent: 1.0, 
+      kgco2e: 607.0, 
+      quantity_m2: 12.14 
+    },
+    other: { 
+      percent: 17.4, 
+      kgco2e: 10228.6 
+    }
+  },
+  
+  concrete_total_m3: 131.473,
+  concrete_walls_m3: 54.481,
+  concrete_slabs_m3: 76.992,
+  
+  emission_factors: {
+    concrete_structural: 350,
+    concrete_low_clinker: 260,
+    glazing: 90,
+    doors: 50
+  },
+  
+  scenarios: {
+    baseline: { 
+      intensity: 282.6, 
+      total: 58936.4 
+    },
+    low_clinker: { 
+      intensity: 230, 
+      total: 48000, 
+      reduction_percent: 18.6 
+    },
+    lighter_slabs: { 
+      intensity: 210, 
+      total: 43500, 
+      reduction_percent: 26.2 
+    }
+  },
+  
+  floor_areas: {
+    ground_floor_m2: 98.833,
+    upper_floor_m2: 74.509,
+    total_m2: 208.546
+  }
+};
+
+// 13) Combined context we send to the LLM
 
 export const BIM_CARBON_CONTEXT = {
+  version: "1.0.0",
+  schema_date: "2025-01-15",
+  quick_ref: BIM_CARBON_CONTEXT_QUICK_REF,
   ifc_data: IFC_DATA,
   project_summary: PROJECT_SUMMARY,
   geometry_aggregates: GEOMETRY_AGGREGATES,

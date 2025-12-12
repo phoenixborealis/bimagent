@@ -4,11 +4,21 @@ import {
   Loader2, CheckCircle2, ChevronDown, ChevronUp, 
   Database, Leaf, FileCheck, Layers, Zap, PieChart, Repeat, TrendingUp
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { demoData } from './data/demoData'; 
-import { cn } from './lib/utils'; 
+import { demoData } from './data/demoData.js'; 
+import { cn } from './lib/utils';
+import { useDashboardContext } from './contexts/DashboardContext';
+import { DashboardHeader } from './components/dashboard/DashboardHeader';
+import { KPIRow } from './components/dashboard/KPIRow';
+import { EmissionsComparisonPanel } from './components/dashboard/EmissionsComparisonPanel';
+import { BreakdownPanel } from './components/dashboard/BreakdownPanel';
+import { ScenarioExplorer } from './components/dashboard/ScenarioExplorer';
+import { BenchmarkPanel } from './components/dashboard/BenchmarkPanel';
+import { EmbodiedVsOperationalPanel } from './components/dashboard/EmbodiedVsOperationalPanel';
+import { DataQualityPanel } from './components/dashboard/DataQualityPanel';
+import { BIMIntegrationPanel } from './components/dashboard/BIMIntegrationPanel';
+import { MetricCardSkeleton, ChartSkeleton } from './components/dashboard/Skeleton'; 
 
 // --- TYPES ---
 type AppState = 'IDLE' | 'PARSING' | 'GAP_DETECTED' | 'CALCULATING' | 'INSIGHT_MODE';
@@ -39,6 +49,17 @@ const QUERY_CATEGORIES: QueryCategory[] = [
       'Quais materiais mais contribuem para as emissões totais?',
       'Quanto concreto estrutural temos no projeto?',
       'Qual a quantidade de aço utilizada por tipo?'
+    ]
+  },
+  {
+    id: 'cenários',
+    label: 'Cenários',
+    icon: Repeat,
+    color: 'purple',
+    suggestions: [
+      'Compare o cenário atual com a linha de base',
+      'Quais 3 mudanças mais eficientes para reduzir emissões?',
+      'Mostre o impacto do cenário "Concreto baixo clínquer"'
     ]
   },
   {
@@ -227,7 +248,7 @@ const QueryCategorySelector = ({
 // --- MAIN APPLICATION ---
 
 export default function App() {
-  const [appState, setAppState] = useState<AppState>('IDLE');
+  const { appPhase, setAppPhase, setBimContext, activeScenarioId, bimContext } = useDashboardContext();
   const [messages, setMessages] = useState<Message[]>([
     { 
       id: '1', 
@@ -238,9 +259,28 @@ export default function App() {
   const [input, setInput] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [showContext, setShowContext] = useState(false);
-  // Fixed: Use QueryCategory['id'] type instead of string
   const [activeQueryCategory, setActiveQueryCategory] = useState<QueryCategory['id']>('materiais');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Handle micro-CTA from BreakdownPanel
+  useEffect(() => {
+    const handleAskAboutCategory = (event: CustomEvent) => {
+      const { categoryId, question } = event.detail;
+      setInput(question);
+      // Auto-send the message with category context
+      setTimeout(() => {
+        handleSendMessage(question, categoryId);
+      }, 100);
+    };
+    
+    window.addEventListener('askAboutCategory', handleAskAboutCategory as EventListener);
+    return () => {
+      window.removeEventListener('askAboutCategory', handleAskAboutCategory as EventListener);
+    };
+  }, [activeScenarioId]); // Include activeScenarioId in deps
+  
+  // Sync local appState with global appPhase (for backward compatibility during migration)
+  const appState = appPhase;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -249,7 +289,7 @@ export default function App() {
   // --- NARRATIVE FLOW ---
 
   const startIngestion = () => {
-    setAppState('PARSING');
+    setAppPhase('PARSING');
     setMessages(prev => [...prev, { id: 'u1', role: 'user', content: "Arquivo enviado: AC20-FZK-Haus.ifc (145MB)" }]);
 
     setTimeout(() => {
@@ -261,7 +301,7 @@ export default function App() {
     }, 1500);
 
     setTimeout(() => {
-      setAppState('GAP_DETECTED');
+      setAppPhase('GAP_DETECTED');
       setMessages(prev => [...prev, { 
         id: 'a2', 
         role: 'assistant', 
@@ -272,7 +312,7 @@ export default function App() {
   };
 
   const resolveGap = () => {
-    setAppState('CALCULATING');
+    setAppPhase('CALCULATING');
     setMessages(prev => [...prev, { id: 'u2', role: 'user', content: "Sim, confirmar Grid Brasileiro (SIN)." }]);
 
     setTimeout(() => {
@@ -284,7 +324,11 @@ export default function App() {
     }, 1000);
 
     setTimeout(() => {
-      setAppState('INSIGHT_MODE');
+      // Set BIM context when calculations complete
+      import('./data/bimCarbonContext.js').then(({ BIM_CARBON_CONTEXT }) => {
+        setBimContext(BIM_CARBON_CONTEXT);
+      });
+      setAppPhase('INSIGHT_MODE');
       setShowContext(true); 
       setMessages(prev => [...prev, { 
         id: 'a4', 
@@ -296,7 +340,7 @@ export default function App() {
 
   // --- LIVE CHAT ---
 
-  const handleSendMessage = async (textOverride?: string) => {
+  const handleSendMessage = async (textOverride?: string, categoryId?: string) => {
     const textToSend = textOverride || input;
     if (!textToSend.trim() || isChatLoading || appState !== 'INSIGHT_MODE') return;
 
@@ -309,7 +353,11 @@ export default function App() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: textToSend }),
+        body: JSON.stringify({ 
+          message: textToSend,
+          activeScenarioId: activeScenarioId,
+          categoryId: categoryId || null,
+        }),
       });
 
       if (!response.ok) throw new Error("API Error");
@@ -324,13 +372,14 @@ export default function App() {
     }
   };
 
-  const chartData = [
-    { name: 'Linha de Base', value: demoData.inventory_results.baseline_total_tco2e, fill: '#94a3b8' },
-    { name: 'Projeto Real', value: demoData.inventory_results.project_total_tco2e, fill: '#10b981' }, 
-  ];
-
   const isInsightMode = appState === 'INSIGHT_MODE';
+  const isCalculating = appState === 'CALCULATING';
+  const showSkeleton = appState === 'PARSING' || appState === 'GAP_DETECTED' || appState === 'CALCULATING';
   const activeCategoryData = QUERY_CATEGORIES.find(cat => cat.id === activeQueryCategory) || QUERY_CATEGORIES[0];
+  
+  // Get active scenario name for chat badge
+  const activeScenario = bimContext?.scenarios.scenarios.find(s => s.id === activeScenarioId);
+  const activeScenarioName = activeScenario?.label_pt_br || 'Linha de Base';
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans overflow-hidden">
@@ -342,83 +391,57 @@ export default function App() {
         <div 
           className={cn(
             "bg-white border-r overflow-y-auto transition-all duration-700 ease-in-out absolute inset-y-0 left-0 z-0",
-            isInsightMode ? "w-full md:w-[60%] translate-x-0 opacity-100" : "w-[60%] -translate-x-full opacity-0"
+            isInsightMode || showSkeleton 
+              ? "w-full md:w-[60%] translate-x-0 opacity-100" 
+              : "w-[60%] -translate-x-full opacity-0"
           )}
         >
           <div className="p-8 space-y-8 max-w-4xl mx-auto">
-            <div className="border-b pb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide flex items-center gap-1">
-                  <FileCheck className="w-3 h-3" /> PDD V1 Gerado
-                </span>
-                <span className="text-slate-400 text-xs font-medium">Metodologia Verra VM0032</span>
+            {/* Header - Always visible when dashboard is shown */}
+            {showSkeleton ? (
+              <div className="border-b pb-6">
+                <div className="h-8 bg-slate-200 rounded w-64 mb-2 animate-pulse"></div>
+                <div className="h-4 bg-slate-200 rounded w-48 animate-pulse"></div>
               </div>
-              <h1 className="text-3xl font-bold text-slate-900">{demoData.project.name}</h1>
-              <div className="flex items-center gap-4 mt-2 text-slate-500 text-sm">
-                <span>{demoData.project.location.city}, {demoData.project.location.state}</span>
-                <span>•</span>
-                <span>{demoData.project.typology}</span>
-              </div>
-            </div>
+            ) : (
+              <DashboardHeader />
+            )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-slate-50 p-5 rounded-xl border border-slate-100">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Baseline</h3>
-                <div className="text-2xl font-bold text-slate-700">
-                  {demoData.inventory_results.baseline_total_tco2e.toLocaleString()} 
-                  <span className="text-sm font-normal text-slate-400"> tCO₂e</span>
-                </div>
+            {/* KPI Row */}
+            {showSkeleton ? (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <MetricCardSkeleton key={i} />
+                ))}
               </div>
-              <div className="bg-slate-50 p-5 rounded-xl border border-slate-100">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Cenário Projeto</h3>
-                <div className="text-2xl font-bold text-emerald-700">
-                  {demoData.inventory_results.project_total_tco2e.toLocaleString()} 
-                  <span className="text-sm font-normal text-emerald-500"> tCO₂e</span>
-                </div>
-              </div>
-              <div className="bg-emerald-50 p-5 rounded-xl border border-emerald-100 ring-1 ring-emerald-200">
-                <h3 className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-1">Créditos Potenciais</h3>
-                <div className="text-2xl font-bold text-emerald-800">
-                  {demoData.inventory_results.potential_credits.toLocaleString()} 
-                  <span className="text-sm font-normal text-emerald-600"> VCS</span>
-                </div>
-              </div>
-            </div>
+            ) : (
+              <KPIRow />
+            )}
 
-            <div className="bg-white p-6 rounded-xl border shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900 mb-6 flex items-center gap-2">
-                <Leaf className="w-4 h-4 text-emerald-600" />
-                Comparativo de Emissões
-              </h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 0, left: 20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} />
-                    <Tooltip cursor={{fill: '#f1f5f9'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32}>
-                      {chartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            {/* Emissions Comparison Panel */}
+            {showSkeleton ? (
+              <ChartSkeleton height={320} />
+            ) : (
+              <EmissionsComparisonPanel />
+            )}
 
-            <div className="border-t pt-6">
-              <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-lg hover:bg-white hover:border-emerald-200 hover:shadow-md transition cursor-pointer group">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-white border rounded-lg flex items-center justify-center text-red-500 group-hover:text-red-600 shadow-sm">
-                    <FileText className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-900 group-hover:text-emerald-700 transition">Baixar PDD Completo (Draft)</p>
-                    <p className="text-xs text-slate-500">PDF • Gerado agora</p>
-                  </div>
-                </div>
-                <Download className="w-5 h-5 text-slate-400 group-hover:text-emerald-600" />
-              </div>
-            </div>
+            {/* Breakdown Panel (v2) */}
+            {isInsightMode && <BreakdownPanel />}
+
+            {/* Scenario Explorer (v2) */}
+            {isInsightMode && <ScenarioExplorer />}
+
+            {/* Benchmark Panel (v3) */}
+            {isInsightMode && <BenchmarkPanel />}
+
+            {/* Embodied vs Operational Panel (v3) */}
+            {isInsightMode && <EmbodiedVsOperationalPanel />}
+
+            {/* Data Quality Panel (v4) */}
+            {isInsightMode && <DataQualityPanel />}
+
+            {/* BIM Integration Panel (v4) */}
+            {isInsightMode && <BIMIntegrationPanel />}
           </div>
         </div>
 
@@ -426,7 +449,7 @@ export default function App() {
         <div 
           className={cn(
             "flex flex-col bg-white transition-all duration-700 ease-in-out relative z-10 shadow-2xl",
-            isInsightMode 
+            isInsightMode || showSkeleton
               ? "w-full md:w-[40%] ml-auto translate-x-0 border-l border-slate-200" 
               : "w-full max-w-2xl mx-auto border-x border-slate-200 translate-x-0"
           )}
@@ -443,6 +466,13 @@ export default function App() {
                 </div>
               )}
             </div>
+            {/* Active Scenario Badge */}
+            {isInsightMode && activeScenario && (
+              <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-200">
+                <span className="font-medium">Cenário ativo:</span>
+                <span className="text-emerald-700 font-semibold">{activeScenarioName}</span>
+              </div>
+            )}
           </div>
 
           {isInsightMode && (
@@ -523,17 +553,24 @@ export default function App() {
                 onCategoryChange={setActiveQueryCategory}
               />
               <div className="flex flex-col gap-2">
-                {activeCategoryData.suggestions.map((suggestion, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSendMessage(suggestion)}
-                    className={cn(
-                      "text-left p-3 text-xs font-medium text-slate-600 bg-slate-50 rounded-lg border border-slate-200 hover:border-emerald-200 hover:text-emerald-700 hover:bg-emerald-50/50 transition active:scale-[0.98] hover:shadow-sm"
-                    )}
-                  >
-                    {suggestion}
-                  </button>
-                ))}
+                {activeCategoryData.suggestions.map((suggestion, idx) => {
+                  // Make suggestions context-aware by replacing placeholders
+                  const contextAwareSuggestion = suggestion
+                    .replace('cenário atual', activeScenarioName)
+                    .replace('o cenário', `o cenário "${activeScenarioName}"`);
+                  
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => handleSendMessage(contextAwareSuggestion)}
+                      className={cn(
+                        "text-left p-3 text-xs font-medium text-slate-600 bg-slate-50 rounded-lg border border-slate-200 hover:border-emerald-200 hover:text-emerald-700 hover:bg-emerald-50/50 transition active:scale-[0.98] hover:shadow-sm"
+                      )}
+                    >
+                      {contextAwareSuggestion}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

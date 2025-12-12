@@ -1,4 +1,6 @@
-// Removed import to prevent build errors
+// TODO: Remove once BIM_CARBON_CONTEXT fully wired
+// This file is a temporary shim for fields not yet in BIM_CARBON_CONTEXT (credits, Verra metadata)
+// All carbon numbers MUST come from BIM_CARBON_CONTEXT, not this file
 export const demoData = {
   "project": {
     "id": "fzk-haus-ac20-demo",

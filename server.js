@@ -25,116 +25,218 @@ const genAI = new GoogleGenerativeAI(API_KEY);
 // Using the 2.0 Flash Experimental model as requested.
 const MODEL_NAME = "gemini-2.0-flash-exp";
 
+// Base model created ONCE at startup (minimal systemInstruction per Gemini docs)
 const model = genAI.getGenerativeModel({
   model: MODEL_NAME,
   systemInstruction: `
-    You are the Bonde Studio Carbon AI.
+    You are the Bonde Studio Carbon AI, a BIM and carbon consultant.
     
-    ⚠️ CRITICAL INSTRUCTIONS - READ FIRST:
+    CRITICAL RULES:
+    1. You receive BIM_CARBON_CONTEXT data in each user message.
+    2. ALWAYS use pre-computed aggregated data from BIM_CARBON_CONTEXT.
+    3. NEVER say "data is missing" - check BIM_CARBON_CONTEXT first.
+    4. Use Portuguese (PT-BR) for all user-facing responses.
+    5. Format with Markdown, bold key metrics.
     
-    1. You have COMPLETE carbon data in BIM_CARBON_CONTEXT. NEVER say "data is missing" or "I don't have information".
-    2. ALWAYS use PRE-COMPUTED aggregated data, NOT individual IFC elements.
-    3. Before answering ANY question, check the MANDATORY DATA PATHS below.
-    
-    MANDATORY DATA PATHS (Check these FIRST):
-    
-    **carbon_baseline.by_category** = Material contributions to emissions
-      - structural_concrete: 78.1% (46,015.4 kgCO2e, 131.473 m³)
-      - glazing: 3.5% (2,085.3 kgCO2e, 23.17 m²)
-      - doors: 1.0% (607.0 kgCO2e, 12.14 m²)
-      - other: 17.4% (10,228.6 kgCO2e)
-    
-    **carbon_baseline.total_embodied_kgco2e** = 58,936.4 kgCO2e (58.9 tCO2e)
-    **carbon_baseline.intensity_kgco2e_per_m2** = 282.6 kgCO2e/m²
-    
-    **geometry_aggregates.structure** = Total concrete volumes
-      - wall_net_volume_m3: 54.481 m³
-      - slab_net_volume_m3: 76.992 m³
-      - TOTAL: 131.473 m³
-    
-    **material_factors.materials** = Emission factors
-      - mat_concrete_structural: 350 kgCO2e/m³
-      - mat_concrete_structural_low_clinker: 260 kgCO2e/m³
-      - mat_glazing_double: 90 kgCO2e/m²
-      - mat_door_wood_hollow: 50 kgCO2e/m²
-    
-    **scenarios.scenarios** = Pre-computed alternatives
-      - baseline_current_design: 282.6 kgCO2e/m², 58,936.4 kgCO2e
-      - low_clinker_concrete: 230 kgCO2e/m², 48,000 kgCO2e (18.6% reduction)
-      - lighter_slab_plus_window_optimization: 210 kgCO2e/m², 43,500 kgCO2e (26.2% reduction)
-    
-    **reduction_strategies.for_single_family_residential** = Strategy playbook
-      - optimize_structural_concrete: 10-30% reduction
-      - switch_to_low_clinker_concrete: 20-40% reduction
-      - reduce_glazing_area: 5-15% reduction
-    
-    **project_summary.floor_area_by_storey** = Floor areas per level
-      - Ground floor: 98.833 m²
-      - Upper floor: 74.509 m²
-    
-    PORTUGUESE QUESTION → DATA PATH MAPPING:
-    
-    "Quais materiais mais contribuem?" → carbon_baseline.by_category
-      Response: "**Concreto estrutural** representa **78.1%** das emissões (46,015 kgCO2e). Seguido por outros acabamentos (17.4%), esquadrias (3.5%) e portas (1.0%)."
-    
-    "Quanto concreto estrutural?" → carbon_baseline.by_category[0].quantity_m3 OR geometry_aggregates.structure
-      Response: "O projeto possui **131.473 m³** de concreto estrutural (54.481 m³ em paredes + 76.992 m³ em lajes)."
-    
-    "Quais fatores de emissão foram usados?" → material_factors.materials
-      Response: "Concreto estrutural: **350 kgCO2e/m³**. Concreto baixo clínquer: **260 kgCO2e/m³**. Vidro duplo: **90 kgCO2e/m²**. Portas: **50 kgCO2e/m²**."
-    
-    "Qual a redução total?" → carbon_baseline.total_embodied_kgco2e
-      Response: "Total de carbono incorporado: **58.9 tCO2e** (58,936.4 kgCO2e). Intensidade: **282.6 kgCO2e/m²**."
-    
-    "Se eu trocar o concreto por baixo carbono, quanto muda?" → scenarios.scenarios[1] (low_clinker_concrete)
-      Response: "Com concreto baixo clínquer, a redução seria de **18.6%**: de 282.6 para **230 kgCO2e/m²**, totalizando **48.0 tCO2e** (redução de 10.9 tCO2e)."
-    
-    "Quais alternativas reduziriam mais?" → reduction_strategies.for_single_family_residential
-      Response: "1) **Otimizar concreto estrutural**: 10-30% de redução. 2) **Concreto baixo clínquer**: 20-40% de redução. 3) **Reduzir área envidraçada**: 5-15% de redução."
-    
-    "Como se distribuem as emissões por pavimento?" → project_summary.floor_area_by_storey + carbon_baseline.intensity_kgco2e_per_m2
-      Response: "Térreo: 98.833 m² × 282.6 = **27.9 tCO2e**. Superior: 74.509 m² × 282.6 = **21.0 tCO2e**."
-    
-    BIM_CARBON_CONTEXT (JSON object - parse and use this data):
-    ${JSON.stringify(BIM_CARBON_CONTEXT, null, 2)}
-    
-    IMPORTANT: The above is a JSON object. Access data using dot notation:
-    - BIM_CARBON_CONTEXT.carbon_baseline.by_category[0].share_of_total_percent = 78.1
-    - BIM_CARBON_CONTEXT.geometry_aggregates.structure.wall_net_volume_m3 = 54.481
-    - BIM_CARBON_CONTEXT.material_factors.materials[0].emission_factor_kgco2e_per_m3 = 350
-    
-    BEHAVIOR RULES:
-    1. **MANDATORY:** Before answering, check if question matches a mapping above. If yes, use that exact data path.
-    2. **NEVER say "não tenho dados"** - The data exists in carbon_baseline, geometry_aggregates, material_factors, scenarios.
-    3. **ALWAYS cite exact numbers** from the context (e.g., "78.1%", "131.473 m³", "282.6 kgCO2e/m²").
-    4. **Use name_pt_br** fields for Portuguese responses (e.g., "Concreto estrutural" not "Structural concrete").
-    5. **Formatting:** Use Markdown. **Bold** key metrics, percentages, and material names.
-    6. **Language:** Portuguese (PT-BR) for all user-facing text.
-  `,
+    DATA ACCESS PATTERN:
+    - quick_ref = Flattened structure for common queries (fast access)
+    - carbon_baseline.by_category = Emissions by material
+    - geometry_aggregates = Pre-computed volumes/areas
+    - material_factors = Emission factors
+    - scenarios = Pre-computed alternatives
+    - reduction_strategies = Strategy playbook
+  `
 });
+
+// Question classifier for context routing
+function classifyQuestion(message) {
+  const lower = message.toLowerCase();
+  
+  if (lower.includes('materiais mais contribuem') || lower.includes('emissões por categoria') || lower.includes('contribuem para as emissões')) {
+    return 'emissions_by_category';
+  }
+  if (lower.includes('concreto estrutural') || lower.includes('quanto concreto') || lower.includes('quantidade de concreto')) {
+    return 'concrete_quantity';
+  }
+  if (lower.includes('fatores de emissão') || lower.includes('emission factors') || lower.includes('fatores foram usados')) {
+    return 'emission_factors';
+  }
+  if (lower.includes('redução total') || lower.includes('total carbono') || lower.includes('total de carbono') || lower.includes('total de emissões')) {
+    return 'total_carbon';
+  }
+  if (lower.includes('trocar concreto') || lower.includes('baixo carbono') || lower.includes('low-clinker') || lower.includes('baixo clínquer')) {
+    return 'scenario_low_clinker';
+  }
+  if (lower.includes('alternativas') || lower.includes('reduzir emissões') || lower.includes('estratégias') || lower.includes('redução')) {
+    return 'reduction_strategies';
+  }
+  if (lower.includes('por pavimento') || lower.includes('por andar') || lower.includes('distribuem as emissões')) {
+    return 'emissions_by_floor';
+  }
+  if (lower.includes('resumo executivo') || lower.includes('executivo')) {
+    return 'executive_summary';
+  }
+  return 'general';
+}
 
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, activeScenarioId, categoryId } = req.body;
+    const scenarioId = activeScenarioId || BIM_CARBON_CONTEXT.scenarios.baseline_id;
+    
     console.log(`Received chat request. Model: ${MODEL_NAME}`);
     console.log(`User message length: ${message.length} characters`);
-
-    // Verify context data is available
-    const contextKeys = Object.keys(BIM_CARBON_CONTEXT);
-    const hasCarbonBaseline = !!BIM_CARBON_CONTEXT.carbon_baseline?.by_category;
-    const concreteData = BIM_CARBON_CONTEXT.carbon_baseline?.by_category?.[0];
-    
-    console.log(`Context keys available: ${contextKeys.join(', ')}`);
-    console.log(`Has carbon_baseline.by_category: ${hasCarbonBaseline}`);
-    if (concreteData) {
-      console.log(`Sample data - Concrete: ${concreteData.share_of_total_percent}%, ${concreteData.quantity_m3} m³`);
+    console.log(`Active scenario: ${scenarioId}`);
+    if (categoryId) {
+      console.log(`Category context: ${categoryId}`);
     }
 
-    const result = await model.generateContent(message);
+    // Find active scenario (same logic as dashboard adapter)
+    const activeScenario = BIM_CARBON_CONTEXT.scenarios.scenarios.find(s => s.id === scenarioId) ||
+      BIM_CARBON_CONTEXT.scenarios.scenarios.find(s => s.id === BIM_CARBON_CONTEXT.scenarios.baseline_id);
+    
+    if (activeScenario) {
+      console.log(`Active scenario: ${activeScenario.label_pt_br}, Intensity: ${activeScenario.intensity_kgco2e_per_m2} kgCO2e/m²`);
+    }
+
+    // Classify question type for context routing
+    const questionType = classifyQuestion(message);
+    console.log(`Question type: ${questionType}`);
+
+    // Select relevant context based on question type
+    let contextSection = '';
+    let specificInstructions = '';
+    
+    switch(questionType) {
+      case 'emissions_by_category':
+        contextSection = JSON.stringify({
+          quick_ref: {
+            material_contributions: BIM_CARBON_CONTEXT.quick_ref.material_contributions,
+            total_embodied_kgco2e: BIM_CARBON_CONTEXT.quick_ref.total_embodied_kgco2e
+          },
+          carbon_baseline: {
+            by_category: BIM_CARBON_CONTEXT.carbon_baseline.by_category
+          }
+        }, null, 2);
+        specificInstructions = 'Use quick_ref.material_contributions or carbon_baseline.by_category. List each material with percent, kgco2e, and quantity. Use name_pt_br fields for Portuguese.';
+        break;
+        
+      case 'concrete_quantity':
+        contextSection = JSON.stringify({
+          quick_ref: {
+            concrete_total_m3: BIM_CARBON_CONTEXT.quick_ref.concrete_total_m3,
+            concrete_walls_m3: BIM_CARBON_CONTEXT.quick_ref.concrete_walls_m3,
+            concrete_slabs_m3: BIM_CARBON_CONTEXT.quick_ref.concrete_slabs_m3
+          },
+          geometry_aggregates: {
+            structure: BIM_CARBON_CONTEXT.geometry_aggregates.structure
+          }
+        }, null, 2);
+        specificInstructions = 'Use quick_ref.concrete_total_m3 for total (131.473 m³). Break down into walls (54.481 m³) and slabs (76.992 m³).';
+        break;
+        
+      case 'emission_factors':
+        contextSection = JSON.stringify({
+          quick_ref: {
+            emission_factors: BIM_CARBON_CONTEXT.quick_ref.emission_factors
+          },
+          material_factors: {
+            materials: BIM_CARBON_CONTEXT.material_factors.materials
+          }
+        }, null, 2);
+        specificInstructions = 'List all emission factors with units (kgCO2e/m³ or kgCO2e/m²). Use name_pt_br fields for material names.';
+        break;
+        
+      case 'total_carbon':
+        contextSection = JSON.stringify({
+          quick_ref: {
+            total_embodied_kgco2e: BIM_CARBON_CONTEXT.quick_ref.total_embodied_kgco2e,
+            total_embodied_tco2e: BIM_CARBON_CONTEXT.quick_ref.total_embodied_tco2e,
+            intensity_kgco2e_per_m2: BIM_CARBON_CONTEXT.quick_ref.intensity_kgco2e_per_m2
+          },
+          active_scenario: activeScenario
+        }, null, 2);
+        specificInstructions = 'Use quick_ref.total_embodied_kgco2e or active_scenario.total_kgco2e. Convert to tCO2e for display (divide by 1000). When user asks about "current scenario", use active_scenario values.';
+        break;
+        
+      case 'scenario_low_clinker':
+        contextSection = JSON.stringify({
+          quick_ref: {
+            scenarios: BIM_CARBON_CONTEXT.quick_ref.scenarios
+          },
+          scenarios: {
+            scenarios: BIM_CARBON_CONTEXT.scenarios.scenarios
+          }
+        }, null, 2);
+        specificInstructions = 'Use quick_ref.scenarios.low_clinker. Show reduction_percent (18.6%) and new intensity (230 kgCO2e/m²). Compare against baseline (282.6 kgCO2e/m²).';
+        break;
+        
+      case 'reduction_strategies':
+        contextSection = JSON.stringify({
+          reduction_strategies: BIM_CARBON_CONTEXT.reduction_strategies
+        }, null, 2);
+        specificInstructions = 'Use reduction_strategies.for_single_family_residential. List all strategies with typical_reduction_range_percent. Use name_pt_br fields.';
+        break;
+        
+      case 'emissions_by_floor':
+        contextSection = JSON.stringify({
+          quick_ref: {
+            floor_areas: BIM_CARBON_CONTEXT.quick_ref.floor_areas,
+            intensity_kgco2e_per_m2: BIM_CARBON_CONTEXT.quick_ref.intensity_kgco2e_per_m2
+          },
+          project_summary: {
+            floor_area_by_storey: BIM_CARBON_CONTEXT.project_summary.floor_area_by_storey
+          }
+        }, null, 2);
+        specificInstructions = 'Calculate emissions per floor: floor_area × intensity. Ground floor: 98.833 m² × intensity. Upper floor: 74.509 m² × intensity.';
+        break;
+        
+      default:
+        // For general questions, send full context
+        contextSection = JSON.stringify({
+          ...BIM_CARBON_CONTEXT,
+          active_scenario: activeScenario,
+          active_scenario_id: scenarioId,
+          category_context: categoryId || null
+        }, null, 2);
+        specificInstructions = 'Use any relevant section from BIM_CARBON_CONTEXT. Check quick_ref first for common queries.';
+    }
+
+    // Build enhanced prompt with context IN USER MESSAGE (not systemInstruction)
+    const enhancedPrompt = `
+      RELEVANT DATA FOR THIS QUESTION:
+      ${contextSection}
+      
+      ${activeScenario ? `ACTIVE SCENARIO:
+      - Name: ${activeScenario.label_pt_br}
+      - Intensity: ${activeScenario.intensity_kgco2e_per_m2} kgCO₂e/m²
+      - Total: ${activeScenario.total_kgco2e} kgCO₂e
+      ${activeScenario.reduction_vs_baseline_percent ? `- Reduction: ${activeScenario.reduction_vs_baseline_percent}% vs baseline` : ''}` : ''}
+      
+      ${categoryId ? `CATEGORY FOCUS: Answer specifically about category "${categoryId}" from carbon_baseline.by_category.` : ''}
+      
+      User Question: ${message}
+      
+      ANSWERING INSTRUCTIONS:
+      ${specificInstructions}
+      
+      GENERAL RULES:
+      1. Parse the JSON above as a JavaScript object
+      2. Access data using dot notation (e.g., quick_ref.material_contributions.concrete.percent = 78.1)
+      3. Always cite exact numbers from the context (e.g., "78.1%", "131.473 m³", "282.6 kgCO2e/m²")
+      4. Use name_pt_br fields for Portuguese responses
+      5. Format with Markdown, bold key metrics
+      6. When user asks about "current scenario" or "this project", use ACTIVE SCENARIO values above
+      7. NEVER say "não tenho dados" - the data exists in the context above
+    `;
+    
+    // Reuse base model (don't create new one)
+    const result = await model.generateContent(enhancedPrompt);
     const responseText = result.response.text();
     
-    // Log response length for debugging
+    // Log response length and token usage estimate
     console.log(`Response length: ${responseText.length} characters`);
+    console.log(`Context section size: ~${Math.round(contextSection.length / 4)} tokens (estimated)`);
 
     res.json({ reply: responseText });
 
@@ -153,7 +255,18 @@ app.post('/api/chat', async (req, res) => {
 // Test endpoint to verify LLM can see context
 app.post('/api/test-context', async (req, res) => {
   try {
-    const testPrompt = "List all the top-level keys in BIM_CARBON_CONTEXT. Then tell me the exact value of carbon_baseline.total_embodied_kgco2e and carbon_baseline.by_category[0].share_of_total_percent. Be specific with numbers.";
+    const testPrompt = `
+      BIM_CARBON_CONTEXT (JSON object - use this data):
+      ${JSON.stringify(BIM_CARBON_CONTEXT, null, 2)}
+      
+      Test Question: List all the top-level keys in BIM_CARBON_CONTEXT. Then tell me the exact value of carbon_baseline.total_embodied_kgco2e and carbon_baseline.by_category[0].share_of_total_percent. Be specific with numbers.
+      
+      ANSWERING INSTRUCTIONS:
+      - Parse the JSON above
+      - List all top-level keys
+      - Provide exact values: carbon_baseline.total_embodied_kgco2e and carbon_baseline.by_category[0].share_of_total_percent
+      - Use exact numbers from the context
+    `;
     console.log('Testing context visibility...');
     const result = await model.generateContent(testPrompt);
     const responseText = result.response.text();
