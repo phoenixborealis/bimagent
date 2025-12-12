@@ -1,0 +1,194 @@
+{
+  "project": {
+    "id": "alto-do-parque-demo",
+    "name": "Residencial Alto do Parque",
+    "developer": "Construtora Exemplo S.A.",
+    "location": {
+      "city": "São Paulo",
+      "state": "SP",
+      "country": "Brazil"
+    },
+    "typology": "Residential multifamily high-rise",
+    "description": "10-storey residential building with 2 underground parking levels and common areas. Prototype used by Bonde Studio to demonstrate carbon accounting on top of BIM data.",
+    "gross_floor_area_m2": 7500,
+    "storeys_above_ground": 10,
+    "storeys_below_ground": 2,
+    "construction_period": {
+      "start": "2026-01-01",
+      "end": "2027-12-31"
+    },
+    "methodologies": [
+      "Verra VM0032 (Low-Carbon Construction Materials)",
+      "GHG Protocol – scopes 1, 2 and 3"
+    ]
+  },
+  "bim_geometry": {
+    "source_ifc_file": "AC20-FZK-Haus.ifc",
+    "model_units": "metric",
+    "estimated_bim_gross_area_m2": 7500,
+    "elements_summary": {
+      "num_walls": 820,
+      "num_windows": 260,
+      "num_slabs": 45,
+      "num_columns": 190,
+      "num_beams": 210
+    },
+    "usage_profile": {
+      "primary_use": "Residential",
+      "num_units": 80,
+      "occupancy_type": "permanent",
+      "average_occupancy_per_unit": 3
+    }
+  },
+  "materials_baseline_vs_project": {
+    "units": "tCO2e",
+    "notes": "Baseline represents standard Brazilian construction practice; Project represents the low-carbon design choices. Values are consistent with total scope 3 emissions in the inventory.",
+    "scope3_baseline_total_tco2e": 2504.0,
+    "scope3_project_total_tco2e": 1569.0,
+    "baseline_by_material": [
+      {
+        "material": "Concrete – conventional",
+        "quantity_unit": "m3",
+        "baseline_quantity": 2900,
+        "emission_factor_baseline_kgco2_per_unit": 330,
+        "emissions_baseline_tco2e": 856.7
+      },
+      {
+        "material": "Portland cement – CP-II",
+        "quantity_unit": "t",
+        "baseline_quantity": 1450,
+        "emission_factor_baseline_kgco2_per_unit": 820,
+        "emissions_baseline_tco2e": 1051.4
+      },
+      {
+        "material": "Rebar – CA-50 blast furnace route",
+        "quantity_unit": "t",
+        "baseline_quantity": 580,
+        "emission_factor_baseline_kgco2_per_unit": 1950,
+        "emissions_baseline_tco2e": 584.1
+      },
+      {
+        "material": "Ceramic masonry blocks",
+        "quantity_unit": "units",
+        "baseline_quantity": 22000,
+        "emission_factor_baseline_kgco2_per_unit": 0.43,
+        "emissions_baseline_tco2e": 5.9
+      },
+      {
+        "material": "Gypsum (plaster)",
+        "quantity_unit": "t",
+        "baseline_quantity": 18,
+        "emissions_baseline_tco2e": 4.3
+      },
+      {
+        "material": "Paints and waterproofing",
+        "quantity_unit": "t",
+        "baseline_quantity": 6.4,
+        "emissions_baseline_tco2e": 1.6
+      }
+    ],
+    "project_by_material": [
+      {
+        "material": "Concrete – low-carbon (slag/pozzolan)",
+        "quantity_unit": "m3",
+        "project_quantity": 2900,
+        "emission_factor_project_kgco2_per_unit": 220,
+        "emissions_project_tco2e": 536.8
+      },
+      {
+        "material": "Cement – CP-III/CP-IV blended",
+        "quantity_unit": "t",
+        "project_quantity": 1450,
+        "emission_factor_project_kgco2_per_unit": 540,
+        "emissions_project_tco2e": 658.8
+      },
+      {
+        "material": "Steel – electric arc furnace route",
+        "quantity_unit": "t",
+        "project_quantity": 580,
+        "emission_factor_project_kgco2_per_unit": 750,
+        "emissions_project_tco2e": 366.0
+      },
+      {
+        "material": "Soil-cement masonry blocks",
+        "quantity_unit": "units",
+        "project_quantity": 22000,
+        "emissions_project_tco2e": 3.7
+      },
+      {
+        "material": "Gypsum (plaster)",
+        "quantity_unit": "t",
+        "project_quantity": 18,
+        "emissions_project_tco2e": 2.7
+      },
+      {
+        "material": "Paints and waterproofing – low-VOC",
+        "quantity_unit": "t",
+        "project_quantity": 6.4,
+        "emissions_project_tco2e": 1.0
+      }
+    ]
+  },
+  "inventory_results": {
+    "units": "tCO2e",
+    "baseline_total_tco2e": 2954.0,
+    "project_total_tco2e": 1900.0,
+    "net_reduction_tco2e": 1054.0,
+    "potential_credits": 1054.0,
+    "scopes": {
+      "baseline": {
+        "scope1_machines_tco2e": 400.0,
+        "scope2_electricity_tco2e": 50.0,
+        "scope3_materials_and_transport_tco2e": 2504.0
+      },
+      "project": {
+        "scope1_machines_tco2e": 312.0,
+        "scope2_electricity_tco2e": 19.0,
+        "scope3_materials_and_transport_tco2e": 1569.0
+      }
+    },
+    "key_drivers": {
+      "largest_reduction_sources": [
+        "Switch from blast-furnace steel to EAF steel",
+        "Lower-clinker cement (CP-III/IV)",
+        "Low-carbon concrete mix with SCMs",
+        "Shorter transport distances for heavy materials"
+      ]
+    }
+  },
+  "transport_and_site": {
+    "baseline_average_transport_distance_km": 40,
+    "project_average_transport_distance_km": 20,
+    "notes": "Project scenario assumes local suppliers within a 15–20 km perimeter for high-mass materials such as cement, concrete and steel.",
+    "site_energy": {
+      "baseline_grid_kwh": 485000,
+      "baseline_emission_factor_grid_kgco2_per_kwh": 0.058,
+      "project_grid_kwh": 398000,
+      "project_solar_kwh": 87000,
+      "project_solar_share_percent": 18,
+      "project_emission_factor_grid_kgco2_per_kwh": 0.039
+    }
+  },
+  "monitoring_plan": {
+    "document_sources": [
+      "Material delivery slips and invoices",
+      "Daily site reports (RDO digital)",
+      "Machine telematics logs",
+      "Electricity and fuel bills",
+      "Laboratory test reports for concrete mixes",
+      "Annual carbon inventory report in ISO 14064-1 format"
+    ],
+    "audit_frequency_months": 12,
+    "third_party_auditors_examples": [
+      "Bureau Veritas",
+      "DNV",
+      "SGS"
+    ]
+  },
+  "pdd_links": {
+    "official_verra_pd_example_pdf": "vcs-pd-nova-dutra_sao-silvestre_vila-nova_v5.pdf",
+    "ccb_vcs_pd_template_docx": "CCB-and-VCS-Project-Description-Template-CCB-v3.0-VCS-v4.3.docx",
+    "ccb_vcs_monitoring_template_docx": "CCB-and-VCS-Monitoring-Report-Template-CCB-v3.0-VCS-v4.3.docx",
+    "notes": "The official Verra PD PDF is from an unrelated project (ceramics), used purely as a realistic reference document in the demo."
+  }
+}
