@@ -25,26 +25,79 @@ const genAI = new GoogleGenerativeAI(API_KEY);
 // Using the 2.0 Flash Experimental model as requested.
 const MODEL_NAME = "gemini-2.0-flash-exp";
 
+// Helper function to create safe context (no ifc_data)
+function createSafeContext(includeSections = null) {
+  const { ifc_data, ifc_writeback, ...safeContext } = BIM_CARBON_CONTEXT;
+  
+  // If specific sections requested, return only those
+  if (includeSections) {
+    const filtered = {};
+    includeSections.forEach(section => {
+      if (safeContext[section]) {
+        filtered[section] = safeContext[section];
+      }
+    });
+    return filtered;
+  }
+  
+  return safeContext;
+}
+
 // Base model created ONCE at startup (minimal systemInstruction per Gemini docs)
 const model = genAI.getGenerativeModel({
   model: MODEL_NAME,
   systemInstruction: `
-    You are the Bonde Studio Carbon AI, a BIM and carbon consultant.
+    You are the Bonde Studio Carbon AI, a carbon analysis copilot.
     
-    CRITICAL RULES:
-    1. You receive BIM_CARBON_CONTEXT data in each user message.
-    2. ALWAYS use pre-computed aggregated data from BIM_CARBON_CONTEXT.
-    3. NEVER say "data is missing" - check BIM_CARBON_CONTEXT first.
-    4. Use Portuguese (PT-BR) for all user-facing responses.
-    5. Format with Markdown, bold key metrics.
+    You MUST answer using ONLY pre-computed, aggregated values from the JSON context provided in each user message.
     
-    DATA ACCESS PATTERN:
-    - quick_ref = Flattened structure for common queries (fast access)
-    - carbon_baseline.by_category = Emissions by material
-    - geometry_aggregates = Pre-computed volumes/areas
-    - material_factors = Emission factors
-    - scenarios = Pre-computed alternatives
-    - reduction_strategies = Strategy playbook
+    ABSOLUTE RULES:
+    1. DO NOT read or use raw IFC elements (ifc_data) for calculations.
+    2. DO NOT sum, count, or recompute geometry from raw data.
+    3. DO NOT access individual IFC elements (walls, slabs, windows) by ID.
+    4. USE ONLY these allowed sources for numbers:
+       - quick_ref.* (flattened structure for common queries)
+       - carbon_baseline.* (pre-computed emissions by category)
+       - geometry_aggregates.* (pre-computed volumes/areas)
+       - material_factors.* (emission factors)
+       - scenarios.* (pre-computed alternatives)
+       - benchmarks.* (market comparisons)
+       - operational_carbon.* (lifetime operational emissions)
+       - reduction_strategies.* (strategy playbook)
+       - project_summary.* (project metadata)
+       - data_quality.* (coverage metrics)
+    
+    5. If the user asks for a number you cannot find in these allowed fields, say clearly that it is not available instead of trying to calculate it yourself.
+    
+    6. Use Portuguese (PT-BR) for all user-facing responses.
+    7. Format with Markdown, bold key metrics.
+    
+    EXAMPLE DATA PATHS (do not recalculate):
+    - Main contributors by material:
+      quick_ref.material_contributions.concrete.percent = 78.1 (%)
+      carbon_baseline.by_category[0].share_of_total_percent = 78.1 (%)
+    
+    - Structural concrete volume:
+      quick_ref.concrete_total_m3 = 131.473 (m³)
+      geometry_aggregates.structure.wall_net_volume_m3 + slab_net_volume_m3 = 131.473 (m³)
+    
+    - Total embodied emissions:
+      quick_ref.total_embodied_kgco2e = 58936.4 (kgCO₂e)
+      carbon_baseline.total_embodied_kgco2e = 58936.4 (kgCO₂e)
+    
+    - Category shares:
+      carbon_baseline.by_category[i].share_of_total_percent
+      carbon_baseline.by_category[i].embodied_kgco2e
+      carbon_baseline.by_category[i].quantity_m3 or quantity_m2
+    
+    - Emission factors:
+      quick_ref.emission_factors.concrete_structural = 350 (kgCO₂e/m³)
+      material_factors.materials[i].emission_factor_kgco2e_per_m3
+    
+    - Scenario comparisons:
+      quick_ref.scenarios.baseline.intensity = 282.6 (kgCO₂e/m²)
+      scenarios.scenarios[i].intensity_kgco2e_per_m2
+      scenarios.scenarios[i].reduction_vs_baseline_percent
   `
 });
 
@@ -52,36 +105,95 @@ const model = genAI.getGenerativeModel({
 function classifyQuestion(message) {
   const lower = message.toLowerCase();
   
-  if (lower.includes('materiais mais contribuem') || lower.includes('emissões por categoria') || lower.includes('contribuem para as emissões')) {
+  // Emissions by category - expanded patterns
+  if (lower.includes('materiais mais contribuem') || 
+      lower.includes('emissões por categoria') || 
+      lower.includes('contribuem para as emissões') ||
+      lower.includes('quais materiais') ||
+      lower.includes('maior parte do carbono') ||
+      lower.includes('onde está o carbono')) {
     return 'emissions_by_category';
   }
-  if (lower.includes('concreto estrutural') || lower.includes('quanto concreto') || lower.includes('quantidade de concreto')) {
+  
+  // Concrete quantity - expanded patterns
+  if (lower.includes('concreto estrutural') || 
+      lower.includes('quanto concreto') || 
+      lower.includes('quantidade de concreto') ||
+      lower.includes('volume de concreto') ||
+      lower.includes('m³ de concreto')) {
     return 'concrete_quantity';
   }
-  if (lower.includes('fatores de emissão') || lower.includes('emission factors') || lower.includes('fatores foram usados')) {
+  
+  // Emission factors - expanded patterns
+  if (lower.includes('fatores de emissão') || 
+      lower.includes('emission factors') || 
+      lower.includes('fatores foram usados') ||
+      lower.includes('coeficientes') ||
+      lower.includes('kgco2e/m³') ||
+      lower.includes('kgco2e/m²')) {
     return 'emission_factors';
   }
-  if (lower.includes('redução total') || lower.includes('total carbono') || lower.includes('total de carbono') || lower.includes('total de emissões')) {
+  
+  // Total carbon - expanded patterns
+  if (lower.includes('redução total') || 
+      lower.includes('total carbono') || 
+      lower.includes('total de carbono') || 
+      lower.includes('total de emissões') ||
+      lower.includes('emissões totais') ||
+      lower.includes('carbono total')) {
     return 'total_carbon';
   }
-  if (lower.includes('trocar concreto') || lower.includes('baixo carbono') || lower.includes('low-clinker') || lower.includes('baixo clínquer')) {
+  
+  // Scenario low clinker - expanded patterns
+  if (lower.includes('trocar concreto') || 
+      lower.includes('baixo carbono') || 
+      lower.includes('low-clinker') || 
+      lower.includes('baixo clínquer') ||
+      lower.includes('concreto baixo') ||
+      lower.includes('cenário baixo carbono')) {
     return 'scenario_low_clinker';
   }
-  if (lower.includes('alternativas') || lower.includes('reduzir emissões') || lower.includes('estratégias') || lower.includes('redução')) {
+  
+  // Reduction strategies - expanded patterns
+  if (lower.includes('alternativas') || 
+      lower.includes('reduzir emissões') || 
+      lower.includes('estratégias') || 
+      lower.includes('redução') ||
+      lower.includes('como reduzir') ||
+      lower.includes('opções para reduzir')) {
     return 'reduction_strategies';
   }
-  if (lower.includes('por pavimento') || lower.includes('por andar') || lower.includes('distribuem as emissões')) {
+  
+  // Emissions by floor - expanded patterns
+  if (lower.includes('por pavimento') || 
+      lower.includes('por andar') || 
+      lower.includes('distribuem as emissões') ||
+      lower.includes('emissões por piso') ||
+      (lower.includes('térreo') && lower.includes('superior'))) {
     return 'emissions_by_floor';
   }
-  if (lower.includes('resumo executivo') || lower.includes('executivo')) {
+  
+  // Executive summary
+  if (lower.includes('resumo executivo') || 
+      lower.includes('executivo') ||
+      lower.includes('resumo do projeto')) {
     return 'executive_summary';
   }
+  
+  // Scenario comparison
+  if (lower.includes('compare') || 
+      lower.includes('comparar') ||
+      lower.includes('diferença entre cenários')) {
+    return 'scenario_comparison';
+  }
+  
   return 'general';
 }
 
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, activeScenarioId, categoryId } = req.body;
+    const { message, activeScenarioId, categoryId, debug } = req.body;
+    const enableDebug = debug === true || process.env.ENABLE_IFC_DEBUG === 'true';
     const scenarioId = activeScenarioId || BIM_CARBON_CONTEXT.scenarios.baseline_id;
     
     console.log(`Received chat request. Model: ${MODEL_NAME}`);
@@ -191,15 +303,52 @@ app.post('/api/chat', async (req, res) => {
         specificInstructions = 'Calculate emissions per floor: floor_area × intensity. Ground floor: 98.833 m² × intensity. Upper floor: 74.509 m² × intensity.';
         break;
         
-      default:
-        // For general questions, send full context
+      case 'scenario_comparison':
         contextSection = JSON.stringify({
-          ...BIM_CARBON_CONTEXT,
-          active_scenario: activeScenario,
-          active_scenario_id: scenarioId,
-          category_context: categoryId || null
+          quick_ref: {
+            scenarios: BIM_CARBON_CONTEXT.quick_ref.scenarios
+          },
+          scenarios: {
+            scenarios: BIM_CARBON_CONTEXT.scenarios.scenarios,
+            baseline_id: BIM_CARBON_CONTEXT.scenarios.baseline_id
+          },
+          active_scenario: activeScenario
         }, null, 2);
-        specificInstructions = 'Use any relevant section from BIM_CARBON_CONTEXT. Check quick_ref first for common queries.';
+        specificInstructions = 'Compare scenarios using quick_ref.scenarios or scenarios.scenarios. Show intensity, total emissions, and reduction percentages. Use active_scenario for "current" or "this project" references.';
+        break;
+        
+      default:
+        // For general questions, send targeted aggregate sections (NOT full context with ifc_data)
+        if (enableDebug) {
+          // Debug mode: include ifc_data but still prefer aggregates
+          contextSection = JSON.stringify({
+            ...createSafeContext(),
+            ifc_data: BIM_CARBON_CONTEXT.ifc_data, // Only in debug mode
+            active_scenario: activeScenario,
+            active_scenario_id: scenarioId,
+            category_context: categoryId || null
+          }, null, 2);
+          specificInstructions = 'DEBUG MODE: ifc_data is included. However, still prefer aggregated data from quick_ref, carbon_baseline, etc. Only use ifc_data if the aggregated data is insufficient.';
+        } else {
+          // Normal mode: aggregates only, no ifc_data
+          contextSection = JSON.stringify({
+            quick_ref: BIM_CARBON_CONTEXT.quick_ref,
+            carbon_baseline: BIM_CARBON_CONTEXT.carbon_baseline,
+            geometry_aggregates: BIM_CARBON_CONTEXT.geometry_aggregates,
+            material_factors: BIM_CARBON_CONTEXT.material_factors,
+            scenarios: BIM_CARBON_CONTEXT.scenarios,
+            benchmarks: BIM_CARBON_CONTEXT.benchmarks,
+            reduction_strategies: BIM_CARBON_CONTEXT.reduction_strategies,
+            operational_carbon: BIM_CARBON_CONTEXT.operational_carbon,
+            data_quality: BIM_CARBON_CONTEXT.data_quality,
+            project_summary: BIM_CARBON_CONTEXT.project_summary,
+            active_scenario: activeScenario,
+            active_scenario_id: scenarioId,
+            category_context: categoryId || null
+            // NOTE: ifc_data and ifc_writeback explicitly excluded
+          }, null, 2);
+          specificInstructions = 'Use any relevant section from the context above. Check quick_ref first for common queries. DO NOT access ifc_data - it is not included in this context.';
+        }
     }
 
     // Build enhanced prompt with context IN USER MESSAGE (not systemInstruction)
@@ -227,7 +376,9 @@ app.post('/api/chat', async (req, res) => {
       4. Use name_pt_br fields for Portuguese responses
       5. Format with Markdown, bold key metrics
       6. When user asks about "current scenario" or "this project", use ACTIVE SCENARIO values above
-      7. NEVER say "não tenho dados" - the data exists in the context above
+      7. NEVER say "não tenho dados" - check the allowed sources above first
+      8. CRITICAL: The context above does NOT include ifc_data (raw IFC elements) unless in DEBUG MODE. Do NOT attempt to access it or calculate from individual elements.
+      9. If you need a number that isn't in quick_ref, carbon_baseline, geometry_aggregates, or the other allowed sources, say "Este dado não está disponível nos agregados pré-computados" instead of calculating it.
     `;
     
     // Reuse base model (don't create new one)

@@ -382,10 +382,10 @@ export default function App() {
   const activeScenarioName = activeScenario?.label_pt_br || 'Linha de Base';
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans overflow-hidden">
+    <div className="h-screen bg-slate-50 flex flex-col font-sans overflow-hidden">
       <Header />
 
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden relative min-h-0">
         
         {/* === LEFT PANE: DASHBOARD / PDD === */}
         <div 
@@ -448,7 +448,7 @@ export default function App() {
         {/* === RIGHT PANE: AGENT === */}
         <div 
           className={cn(
-            "flex flex-col bg-white transition-all duration-700 ease-in-out relative z-10 shadow-2xl",
+            "flex flex-col bg-white transition-all duration-700 ease-in-out relative z-10 shadow-2xl h-full",
             isInsightMode || showSkeleton
               ? "w-full md:w-[40%] ml-auto translate-x-0 border-l border-slate-200" 
               : "w-full max-w-2xl mx-auto border-x border-slate-200 translate-x-0"
@@ -479,7 +479,7 @@ export default function App() {
             <AgentContextPanel isOpen={showContext} toggle={() => setShowContext(!showContext)} />
           )}
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50/50">
+          <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50/50 min-h-0">
             {appState === 'IDLE' && (
               <div className="border-2 border-dashed border-slate-300 rounded-xl p-10 bg-white text-center space-y-6 mx-4 mt-10 hover:border-emerald-400 transition-colors">
                 <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
