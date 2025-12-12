@@ -62,7 +62,7 @@ async function getOrCreateCache() {
   `;
 
   const cacheResult = await cacheManager.create({
-    model: "models/gemini-1.5-flash-001",
+    model: "models/gemini-1.5-flash-002",
     displayName: "bonde-demo-cache-" + Date.now(),
     systemInstruction: {
       parts: [{ text: systemInstruction }],
@@ -89,7 +89,7 @@ app.post('/api/chat', async (req, res) => {
 
     try {
       const model = genAI.getGenerativeModel({
-        model: "models/gemini-1.5-flash-001",
+        model: "models/gemini-1.5-flash-002",
         cachedContent: cacheName,
       });
       const result = await model.generateContent(message);
@@ -101,7 +101,7 @@ app.post('/api/chat', async (req, res) => {
       cacheName = await getOrCreateCache();
       
       const model = genAI.getGenerativeModel({
-        model: "models/gemini-1.5-flash-001",
+        model: "models/gemini-1.5-flash-002",
         cachedContent: cacheName,
       });
       const retryResult = await model.generateContent(message);
