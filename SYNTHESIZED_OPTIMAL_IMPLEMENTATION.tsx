@@ -28,7 +28,7 @@ interface QueryCategory {
   suggestions: string[];
 }
 
-// --- CONSTANTS: PRD QUERY DOMAINS ---
+// --- CONSTANTS: PRD QUERY DOMAINS (Structured by PRD Journey 3) ---
 const QUERY_CATEGORIES: QueryCategory[] = [
   {
     id: 'materiais',
@@ -37,7 +37,7 @@ const QUERY_CATEGORIES: QueryCategory[] = [
     color: 'emerald',
     suggestions: [
       'Quais materiais mais contribuem para as emissões totais?',
-      'Quanto concreto estrutural temos no projeto?',
+      'Quanto concreto estrutural temos no projeto e qual o impacto em CO₂e?',
       'Qual a quantidade de aço utilizada por tipo?'
     ]
   },
@@ -47,7 +47,7 @@ const QUERY_CATEGORIES: QueryCategory[] = [
     icon: PieChart,
     color: 'amber',
     suggestions: [
-      'Me mostra um resumo de emissões por categoria.',
+      'Me mostra um resumo de emissões por categoria (Escopos 1, 2 e 3).',
       'Qual a redução total de carbono do projeto em tCO₂e?',
       'Como se distribuem as emissões por pavimento?'
     ]
@@ -58,9 +58,9 @@ const QUERY_CATEGORIES: QueryCategory[] = [
     icon: Zap,
     color: 'blue',
     suggestions: [
-      'Quais fatores de emissão foram usados no cálculo?',
-      'Qual fator de emissão de eletricidade foi usado?',
-      'Explique os Escopos 1, 2 e 3 aplicados aqui.'
+      'Quais fatores de emissão e parâmetros principais foram usados no cálculo?',
+      'Qual fator de emissão de eletricidade foi usado e de qual fonte?',
+      'Explique os Escopos 1, 2 e 3 aplicados neste projeto.'
     ]
   },
   {
@@ -69,9 +69,9 @@ const QUERY_CATEGORIES: QueryCategory[] = [
     icon: Repeat,
     color: 'purple',
     suggestions: [
-      'Quais 3 materiais são candidatos para reduzir emissões?',
-      'Se eu trocar o concreto por baixo carbono, quanto muda?',
-      'Quais alternativas reduziriam mais as emissões?'
+      'Quais 3 materiais são melhores candidatos para reduzir emissões?',
+      'Se eu trocar o concreto convencional por baixo carbono, quanto muda o total?',
+      'Quais alternativas de materiais reduziriam mais as emissões?'
     ]
   },
   {
@@ -80,9 +80,9 @@ const QUERY_CATEGORIES: QueryCategory[] = [
     icon: TrendingUp,
     color: 'slate',
     suggestions: [
-      'Como se distribuem as emissões entre estrutura e envelope?',
+      'Como se distribuem as emissões entre estrutura, envelope e acabamentos?',
       'Me mostra um resumo executivo do projeto.',
-      'Quais são os principais pontos de atenção?'
+      'Quais são os principais pontos de atenção para redução?'
     ]
   }
 ];
@@ -100,7 +100,7 @@ const Header = () => (
         <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
         Agent Active
       </div>
-      <div className="hidden md:block text-sm text-slate-500">Sales Demo v2.1</div>
+      <div className="text-sm text-slate-500">Sales Demo v2.0</div>
     </div>
   </header>
 );
@@ -115,7 +115,7 @@ const AgentContextPanel = ({ isOpen, toggle }: { isOpen: boolean, toggle: () => 
     demoData.bim_geometry.elements_summary.num_beams;
 
   return (
-    <div className="border-b bg-slate-50 transition-all duration-300">
+    <div className="border-b bg-gradient-to-r from-slate-50 to-emerald-50/30 transition-all duration-300">
       <button 
         onClick={toggle}
         className="w-full flex items-center justify-between p-3 text-xs font-medium text-slate-600 hover:bg-white/50 hover:text-slate-800 transition"
@@ -137,7 +137,7 @@ const AgentContextPanel = ({ isOpen, toggle }: { isOpen: boolean, toggle: () => 
             <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1">
               <Layers className="w-3 h-3" /> Dados BIM (IFC)
             </div>
-            <div className="text-xs text-slate-700 bg-white border border-slate-200 p-3 rounded-lg shadow-sm space-y-1">
+            <div className="text-xs text-slate-700 bg-white/80 border border-slate-200 p-3 rounded-lg shadow-sm space-y-1">
               <p>• <strong>{demoData.bim_geometry.elements_summary.num_walls}</strong> Paredes</p>
               <p>• <strong>{demoData.bim_geometry.elements_summary.num_windows}</strong> Janelas</p>
               <p>• <strong>{demoData.bim_geometry.elements_summary.num_slabs}</strong> Lajes / <strong>{demoData.bim_geometry.elements_summary.num_columns}</strong> Colunas</p>
@@ -150,8 +150,8 @@ const AgentContextPanel = ({ isOpen, toggle }: { isOpen: boolean, toggle: () => 
             <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1">
               <PieChart className="w-3 h-3" /> Cálculos de Carbono
             </div>
-            <div className="text-xs text-slate-700 bg-white border border-slate-200 p-3 rounded-lg shadow-sm space-y-1">
-              <p>• <strong className="text-emerald-700">Verra VM0032</strong> (Low-Carbon)</p>
+            <div className="text-xs text-slate-700 bg-white/80 border border-slate-200 p-3 rounded-lg shadow-sm space-y-1">
+              <p>• <strong className="text-emerald-700">Verra VM0032</strong> (Low-Carbon Materials)</p>
               <p>• <strong>GHG Protocol</strong> (Escopos 1-3)</p>
               <p>• Base: Ecoinvent / SIN (Grid BR)</p>
               <p>• Redução: <strong className="text-emerald-700">{demoData.inventory_results.net_reduction_tco2e.toLocaleString()} tCO₂e</strong></p>
@@ -163,34 +163,28 @@ const AgentContextPanel = ({ isOpen, toggle }: { isOpen: boolean, toggle: () => 
   );
 };
 
-// Markdown Message Component (Fixed with proper prose styling)
+// Markdown Message Component (for formatted responses)
 const MarkdownMessage = ({ content }: { content: string }) => (
-  <div className="prose prose-sm max-w-none 
-    prose-headings:text-slate-900 prose-headings:font-bold prose-headings:text-sm prose-headings:my-2
-    prose-p:text-slate-700 prose-p:my-2
-    prose-strong:text-slate-900 prose-strong:font-semibold
-    prose-ul:text-slate-700 prose-ul:my-2 prose-ul:pl-4
-    prose-li:text-slate-700 prose-li:my-1
-    prose-table:text-xs prose-table:w-full
-    prose-code:text-slate-800 prose-code:bg-slate-100 prose-code:px-1 prose-code:rounded">
+  <div className="prose prose-sm max-w-none prose-headings:text-slate-900 prose-p:text-slate-700 prose-strong:text-slate-900 prose-ul:text-slate-700 prose-li:text-slate-700">
     <ReactMarkdown remarkPlugins={[remarkGfm]}>
       {content}
     </ReactMarkdown>
   </div>
 );
 
-// Query Category Selector (Fixed TypeScript types)
+// Query Category Selector (PRD-aligned)
 const QueryCategorySelector = ({ 
   activeCategory, 
   onCategoryChange 
 }: { 
-  activeCategory: QueryCategory['id'];
-  onCategoryChange: (id: QueryCategory['id']) => void;
+  activeCategory: string;
+  onCategoryChange: (id: string) => void;
 }) => {
   const getCategoryStyles = (cat: QueryCategory, isActive: boolean) => {
     if (!isActive) {
       return "bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700";
     }
+    // Active state styles by color
     const activeStyles: Record<string, string> = {
       emerald: "bg-emerald-600 text-white border-emerald-600 shadow-sm",
       amber: "bg-amber-600 text-white border-amber-600 shadow-sm",
@@ -238,20 +232,25 @@ export default function App() {
   const [input, setInput] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [showContext, setShowContext] = useState(false);
-  // Fixed: Use QueryCategory['id'] type instead of string
-  const [activeQueryCategory, setActiveQueryCategory] = useState<QueryCategory['id']>('materiais');
+  const [activeQueryCategory, setActiveQueryCategory] = useState<string>('materiais');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, appState]);
 
-  // --- NARRATIVE FLOW ---
+  // --- NARRATIVE FLOW (Journey 1 & 2) ---
 
   const startIngestion = () => {
     setAppState('PARSING');
-    setMessages(prev => [...prev, { id: 'u1', role: 'user', content: "Arquivo enviado: AC20-FZK-Haus.ifc (145MB)" }]);
+    setMessages(prev => [...prev, { 
+      id: 'u1', 
+      role: 'user', 
+      content: "Arquivo enviado: AC20-FZK-Haus.ifc (145MB)" 
+    }]);
 
+    // Simulate parsing
     setTimeout(() => {
       setMessages(prev => [...prev, { 
         id: 'a1', 
@@ -260,6 +259,7 @@ export default function App() {
       }]);
     }, 1500);
 
+    // Trigger gap detection
     setTimeout(() => {
       setAppState('GAP_DETECTED');
       setMessages(prev => [...prev, { 
@@ -273,7 +273,11 @@ export default function App() {
 
   const resolveGap = () => {
     setAppState('CALCULATING');
-    setMessages(prev => [...prev, { id: 'u2', role: 'user', content: "Sim, confirmar Grid Brasileiro (SIN)." }]);
+    setMessages(prev => [...prev, { 
+      id: 'u2', 
+      role: 'user', 
+      content: "Sim, confirmar Grid Brasileiro (SIN)." 
+    }]);
 
     setTimeout(() => {
       setMessages(prev => [...prev, { 
@@ -285,23 +289,27 @@ export default function App() {
 
     setTimeout(() => {
       setAppState('INSIGHT_MODE');
-      setShowContext(true); 
+      setShowContext(true); // Auto-open context panel
       setMessages(prev => [...prev, { 
         id: 'a4', 
         role: 'assistant', 
-        content: `✅ **Análise Concluída & PDD Gerado**\n\nO projeto **${demoData.project.name}** apresenta uma redução líquida de **${demoData.inventory_results.net_reduction_tco2e.toLocaleString()} tCO₂e** (${Math.round((demoData.inventory_results.net_reduction_tco2e / demoData.inventory_results.baseline_total_tco2e) * 100)}% abaixo do baseline).\n\n**Potencial de créditos VCS:** ${demoData.inventory_results.potential_credits.toLocaleString()} créditos\n\nO documento preliminar está disponível no dashboard ao lado.\n\n---\n\n**Agora posso atuar como sua consultora técnica.** Selecione um tema abaixo para investigar:` 
+        content: `✅ **Análise Concluída & PDD Gerado**\n\nO projeto **${demoData.project.name}** apresenta uma redução líquida de **${demoData.inventory_results.net_reduction_tco2e.toLocaleString()} tCO₂e** (${Math.round((demoData.inventory_results.net_reduction_tco2e / demoData.inventory_results.baseline_total_tco2e) * 100)}% abaixo do baseline).\n\n**Potencial de créditos VCS:** ${demoData.inventory_results.potential_credits.toLocaleString()} créditos\n\nO documento preliminar está disponível no dashboard ao lado.\n\n---\n\n**Agora posso atuar como sua consultora técnica.** Você pode me perguntar sobre:\n\n• **Materiais** (composição, quantidades, impactos)\n• **Emissões** (breakdowns por escopo, categoria, pavimento)\n• **Parâmetros** (fatores de emissão, metodologia)\n• **Alternativas** (cenários de redução)\n• **Relatórios** (sumários, distribuições)` 
       }]);
     }, 4000);
   };
 
-  // --- LIVE CHAT ---
+  // --- LIVE CHAT (Journey 3 - Insight Mode) ---
 
   const handleSendMessage = async (textOverride?: string) => {
     const textToSend = textOverride || input;
     if (!textToSend.trim() || isChatLoading || appState !== 'INSIGHT_MODE') return;
 
     const userMsgId = Date.now().toString();
-    setMessages(prev => [...prev, { id: userMsgId, role: 'user', content: textToSend }]);
+    setMessages(prev => [...prev, { 
+      id: userMsgId, 
+      role: 'user', 
+      content: textToSend 
+    }]);
     setInput("");
     setIsChatLoading(true);
 
@@ -315,14 +323,24 @@ export default function App() {
       if (!response.ok) throw new Error("API Error");
       const data = await response.json();
       
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.reply || "Não consegui analisar isso agora." }]);
+      setMessages(prev => [...prev, { 
+        id: (Date.now() + 1).toString(), 
+        role: 'assistant', 
+        content: data.reply || "Não consegui analisar isso agora." 
+      }]);
 
     } catch (error) {
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: "⚠️ Erro de conexão com a IA. Verifique se o servidor está rodando." }]);
+      setMessages(prev => [...prev, { 
+        id: (Date.now() + 1).toString(), 
+        role: 'assistant', 
+        content: "⚠️ Erro de conexão com a IA. Verifique se o servidor está rodando." 
+      }]);
     } finally {
       setIsChatLoading(false);
     }
   };
+
+  // --- RENDER HELPERS ---
 
   const chartData = [
     { name: 'Linha de Base', value: demoData.inventory_results.baseline_total_tco2e, fill: '#94a3b8' },
@@ -345,7 +363,8 @@ export default function App() {
             isInsightMode ? "w-full md:w-[60%] translate-x-0 opacity-100" : "w-[60%] -translate-x-full opacity-0"
           )}
         >
-          <div className="p-8 space-y-8 max-w-4xl mx-auto">
+          <div className="p-8 space-y-8 max-w-4xl mx-auto animate-in fade-in duration-1000 slide-in-from-left-8 delay-300">
+            {/* Header */}
             <div className="border-b pb-6">
               <div className="flex items-center gap-2 mb-3">
                 <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide flex items-center gap-1">
@@ -361,6 +380,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-slate-50 p-5 rounded-xl border border-slate-100">
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Baseline</h3>
@@ -385,6 +405,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* Chart */}
             <div className="bg-white p-6 rounded-xl border shadow-sm">
               <h3 className="text-sm font-semibold text-slate-900 mb-6 flex items-center gap-2">
                 <Leaf className="w-4 h-4 text-emerald-600" />
@@ -405,6 +426,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* Documents */}
             <div className="border-t pt-6">
               <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-lg hover:bg-white hover:border-emerald-200 hover:shadow-md transition cursor-pointer group">
                 <div className="flex items-center gap-4">
@@ -412,8 +434,10 @@ export default function App() {
                     <FileText className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="font-semibold text-slate-900 group-hover:text-emerald-700 transition">Baixar PDD Completo (Draft)</p>
-                    <p className="text-xs text-slate-500">PDF • Gerado agora</p>
+                    <p className="font-semibold text-slate-900 group-hover:text-emerald-700 transition">
+                      Baixar PDD Completo (Draft)
+                    </p>
+                    <p className="text-xs text-slate-500">PDF • Gerado em {new Date().toLocaleDateString('pt-BR')}</p>
                   </div>
                 </div>
                 <Download className="w-5 h-5 text-slate-400 group-hover:text-emerald-600" />
@@ -422,7 +446,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* === RIGHT PANE: AGENT === */}
+        {/* === RIGHT PANE: AGENT INTERFACE === */}
         <div 
           className={cn(
             "flex flex-col bg-white transition-all duration-700 ease-in-out relative z-10 shadow-2xl",
@@ -431,6 +455,7 @@ export default function App() {
               : "w-full max-w-2xl mx-auto border-x border-slate-200 translate-x-0"
           )}
         >
+          {/* Header */}
           <div className="p-4 border-b bg-white flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <h3 className="font-bold flex items-center gap-2 text-slate-800">
@@ -439,17 +464,20 @@ export default function App() {
               </h3>
               {appState !== 'INSIGHT_MODE' && appState !== 'IDLE' && (
                 <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full animate-pulse font-medium">
-                  <Loader2 className="w-3 h-3 animate-spin" /> Processando
+                  <Loader2 className="w-3 h-3 animate-spin" /> Processando Modelo
                 </div>
               )}
             </div>
           </div>
 
+          {/* Context Panel (BIM + Carbon Data) - Only in Insight Mode */}
           {isInsightMode && (
             <AgentContextPanel isOpen={showContext} toggle={() => setShowContext(!showContext)} />
           )}
 
+          {/* Messages Area */}
           <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50/50">
+            {/* Initial Upload UI */}
             {appState === 'IDLE' && (
               <div className="border-2 border-dashed border-slate-300 rounded-xl p-10 bg-white text-center space-y-6 mx-4 mt-10 hover:border-emerald-400 transition-colors">
                 <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -470,6 +498,7 @@ export default function App() {
               </div>
             )}
 
+            {/* Messages */}
             {messages.map((msg) => (
               <div 
                 key={msg.id} 
@@ -490,6 +519,7 @@ export default function App() {
                     <div className="whitespace-pre-wrap font-sans">{msg.content}</div>
                   )}
                   
+                  {/* Gap Action Button */}
                   {msg.type === 'action_request' && appState === 'GAP_DETECTED' && (
                     <div className="mt-4 flex flex-col gap-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
                       <button 
@@ -505,6 +535,7 @@ export default function App() {
               </div>
             ))}
             
+            {/* Loading State */}
             {isChatLoading && (
               <div className="flex justify-start">
                 <div className="bg-white border p-3 rounded-2xl rounded-tl-sm shadow-sm flex items-center gap-2">
@@ -516,19 +547,24 @@ export default function App() {
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Query Category Selector & Suggestions (Only in Insight Mode) */}
           {isInsightMode && !isChatLoading && (
             <div className="bg-white border-t px-4 py-3 space-y-3">
+              {/* Category Tabs */}
               <QueryCategorySelector 
                 activeCategory={activeQueryCategory} 
                 onCategoryChange={setActiveQueryCategory}
               />
+              
+              {/* Category Suggestions */}
               <div className="flex flex-col gap-2">
                 {activeCategoryData.suggestions.map((suggestion, idx) => (
                   <button
                     key={idx}
                     onClick={() => handleSendMessage(suggestion)}
                     className={cn(
-                      "text-left p-3 text-xs font-medium text-slate-600 bg-slate-50 rounded-lg border border-slate-200 hover:border-emerald-200 hover:text-emerald-700 hover:bg-emerald-50/50 transition active:scale-[0.98] hover:shadow-sm"
+                      "text-left p-3 text-xs font-medium text-slate-600 bg-slate-50 rounded-lg border border-slate-200 hover:border-emerald-200 hover:text-emerald-700 hover:bg-emerald-50/50 transition active:scale-[0.98]",
+                      `hover:shadow-sm`
                     )}
                   >
                     {suggestion}
@@ -538,6 +574,7 @@ export default function App() {
             </div>
           )}
 
+          {/* Input Area */}
           <div className="p-4 bg-white border-t relative">
             <div className="relative">
               <input 
@@ -556,6 +593,11 @@ export default function App() {
                 <Send className="w-4 h-4" />
               </button>
             </div>
+            {isInsightMode && (
+              <p className="text-[10px] text-center text-slate-400 mt-2">
+                O Agente pode cometer erros. Verifique informações críticas no PDD gerado.
+              </p>
+            )}
           </div>
         </div>
       </div>

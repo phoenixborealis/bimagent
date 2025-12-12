@@ -1,8 +1,8 @@
 // Removed import to prevent build errors
 export const demoData = {
   "project": {
-    "id": "alto-do-parque-demo",
-    "name": "Residencial Alto do Parque",
+    "id": "fzk-haus-ac20-demo",
+    "name": "FZK-Haus AC20",
     "developer": "Construtora Exemplo S.A.",
     "location": {
       "city": "São Paulo",
@@ -24,7 +24,7 @@ export const demoData = {
     ]
   },
   "bim_geometry": {
-    "source_ifc_file": "AC20-FZK-Haus.ifc",
+    "source_ifc_file": "FZK-Haus AC20-Final.ifc",
     "model_units": "metric",
     "estimated_bim_gross_area_m2": 7500,
     "elements_summary": {
