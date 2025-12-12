@@ -427,7 +427,7 @@ export default function App() {
           className={cn(
             "flex flex-col bg-white transition-all duration-700 ease-in-out relative z-10 shadow-2xl",
             isInsightMode 
-              ? "w-full md:w-[40%] translate-x-0 border-l border-slate-200" 
+              ? "w-full md:w-[40%] ml-auto translate-x-0 border-l border-slate-200" 
               : "w-full max-w-2xl mx-auto border-x border-slate-200 translate-x-0"
           )}
         >
