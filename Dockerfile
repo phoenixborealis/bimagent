@@ -23,7 +23,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Copy built static files and server files from builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.js ./
-COPY --from=builder /app/server-data.js ./
+COPY --from=builder /app/data ./data
 
 # Expose port
 ENV PORT=8080
