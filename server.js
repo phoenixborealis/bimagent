@@ -11,7 +11,6 @@ const API_KEY = process.env.API_KEY || process.env.GEMINI_API_KEY;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Increase body limit just in case
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'dist')));
 
@@ -22,11 +21,12 @@ if (!API_KEY) {
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-// --- CONFIGURE MODEL WITH DATA ---
-// Instead of caching, we inject the data directly into the system instruction.
-// Gemini 1.5 Flash has a 1 Million token window, so this fits easily.
+// STRICT CONFIGURATION: NO FALLBACKS
+// Using the 2.0 Flash Experimental model as requested.
+const MODEL_NAME = "gemini-2.0-flash-exp";
+
 const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash", // Standard stable model alias
+  model: MODEL_NAME,
   systemInstruction: `
     You are the Bonde Studio Carbon AI.
     
@@ -51,26 +51,23 @@ const model = genAI.getGenerativeModel({
   `,
 });
 
-// --- API Route ---
 app.post('/api/chat', async (req, res) => {
   try {
     const { message } = req.body;
-    console.log("Received chat request:", message);
+    console.log(`Received chat request. Model: ${MODEL_NAME}`);
 
-    // Generate Content (Standard Stateless Request)
     const result = await model.generateContent(message);
     const responseText = result.response.text();
 
-    return res.json({ reply: responseText });
+    res.json({ reply: responseText });
 
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    // Return a friendly error so the UI doesn't look broken
-    res.json({ reply: "Desculpe, estou ajustando meus parâmetros. Poderia perguntar novamente?" });
+    console.error("Gemini API Fatal Error:", error);
+    // Return the actual error to the UI for immediate visibility
+    res.status(500).json({ reply: `Erro Técnico (${error.status || 500}): ${error.message}` });
   }
 });
 
-// --- Catch-all for React Frontend ---
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
