@@ -95,8 +95,13 @@ const model = genAI.getGenerativeModel({
     "Como se distribuem as emissões por pavimento?" → project_summary.floor_area_by_storey + carbon_baseline.intensity_kgco2e_per_m2
       Response: "Térreo: 98.833 m² × 282.6 = **27.9 tCO2e**. Superior: 74.509 m² × 282.6 = **21.0 tCO2e**."
     
-    BIM_CARBON_CONTEXT:
-    ${JSON.stringify(BIM_CARBON_CONTEXT)}
+    BIM_CARBON_CONTEXT (JSON object - parse and use this data):
+    ${JSON.stringify(BIM_CARBON_CONTEXT, null, 2)}
+    
+    IMPORTANT: The above is a JSON object. Access data using dot notation:
+    - BIM_CARBON_CONTEXT.carbon_baseline.by_category[0].share_of_total_percent = 78.1
+    - BIM_CARBON_CONTEXT.geometry_aggregates.structure.wall_net_volume_m3 = 54.481
+    - BIM_CARBON_CONTEXT.material_factors.materials[0].emission_factor_kgco2e_per_m3 = 350
     
     BEHAVIOR RULES:
     1. **MANDATORY:** Before answering, check if question matches a mapping above. If yes, use that exact data path.
@@ -112,16 +117,50 @@ app.post('/api/chat', async (req, res) => {
   try {
     const { message } = req.body;
     console.log(`Received chat request. Model: ${MODEL_NAME}`);
+    console.log(`User message length: ${message.length} characters`);
+
+    // Verify context data is available
+    const contextKeys = Object.keys(BIM_CARBON_CONTEXT);
+    const hasCarbonBaseline = !!BIM_CARBON_CONTEXT.carbon_baseline?.by_category;
+    const concreteData = BIM_CARBON_CONTEXT.carbon_baseline?.by_category?.[0];
+    
+    console.log(`Context keys available: ${contextKeys.join(', ')}`);
+    console.log(`Has carbon_baseline.by_category: ${hasCarbonBaseline}`);
+    if (concreteData) {
+      console.log(`Sample data - Concrete: ${concreteData.share_of_total_percent}%, ${concreteData.quantity_m3} m³`);
+    }
 
     const result = await model.generateContent(message);
     const responseText = result.response.text();
+    
+    // Log response length for debugging
+    console.log(`Response length: ${responseText.length} characters`);
 
     res.json({ reply: responseText });
 
   } catch (error) {
     console.error("Gemini API Fatal Error:", error);
+    console.error("Error details:", {
+      status: error.status,
+      message: error.message,
+      stack: error.stack
+    });
     // Return the actual error to the UI for immediate visibility
     res.status(500).json({ reply: `Erro Técnico (${error.status || 500}): ${error.message}` });
+  }
+});
+
+// Test endpoint to verify LLM can see context
+app.post('/api/test-context', async (req, res) => {
+  try {
+    const testPrompt = "List all the top-level keys in BIM_CARBON_CONTEXT. Then tell me the exact value of carbon_baseline.total_embodied_kgco2e and carbon_baseline.by_category[0].share_of_total_percent. Be specific with numbers.";
+    console.log('Testing context visibility...');
+    const result = await model.generateContent(testPrompt);
+    const responseText = result.response.text();
+    res.json({ reply: responseText, context_keys: Object.keys(BIM_CARBON_CONTEXT) });
+  } catch (error) {
+    console.error("Test context error:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 

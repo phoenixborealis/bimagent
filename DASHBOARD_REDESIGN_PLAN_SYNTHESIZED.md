@@ -2,7 +2,14 @@
 
 ## Executive Summary
 
-This refined plan transforms the dashboard into a professional BIM+Carbon cockpit aligned with established tools (One Click LCA, IfcLCA, Autodesk Insight, Planetary), while maintaining tight bidirectional integration with the chat UX. The dashboard operates both as a **standalone control center** (users can explore scenarios, benchmarks, breakdowns independently) and as a **context provider** to the chat agent (ensuring chat answers reference the currently selected scenario).
+This refined plan transforms the dashboard into a professional BIM+Carbon cockpit aligned with established tools (One Click LCA, IfcLCA, Autodesk Insight, Planetary, Power BI Copilot), while maintaining tight bidirectional integration with the chat UX. 
+
+**Core Mental Model: "One Brain, Two Faces"**
+
+* **Left:** The *carbon dashboard* (numbers, charts, scenarios, benchmarks)
+* **Right:** The *carbon agent* (chat, ingestion steps, explanations, narrative)
+
+Both read/write the **same state**: `BIM_CARBON_CONTEXT + activeScenarioId + appPhase`. That's how the dashboard and chat stay perfectly in sync—everything the user sees in chat exists on the dashboard, and vice versa. This mirrors the pattern used in Power BI Copilot and Autodesk Insight's flexible dashboard + scenario comparison.
 
 ---
 
@@ -54,32 +61,110 @@ export const BIM_CARBON_CONTEXT = {
 
 ---
 
-## 2. UI Interaction Model: Dashboard ↔ Chat Bidirectional Flow
+## 2. Shared State Architecture: "One Brain, Two Faces"
 
-### The Two Modes of Interaction
+### Global State Store
 
-#### Mode 1: Dashboard-Driven (User Explores Dashboard)
+**Core State (React Context/Zustand/etc.):**
+```typescript
+{
+  appPhase: "IDLE" | "PARSING" | "GAP_DETECTED" | "CALCULATING" | "INSIGHT_MODE";
+  bimContext: BIM_CARBON_CONTEXT; // project_summary, carbon_baseline, scenarios, benchmarks, etc.
+  activeScenarioId: string;       // e.g. "baseline_current_design"
+}
+```
+
+**How State is Shared:**
+- **Agent (Chat)** drives `appPhase` (upload → parsing → gap → calculating → insight)
+- **Agent** fills `bimContext` when calculations are done
+- **Agent** receives `activeScenarioId` with each chat message so LLM always knows current scenario
+- **Dashboard** only renders when `appPhase === "INSIGHT_MODE"`
+- **Dashboard** reads `bimContext` and `activeScenarioId` to populate all sections
+- **Both** write to `activeScenarioId` when scenarios change
+
+**The Contract:**
+> Any carbon number the user sees in chat must exist somewhere on the dashboard, and vice versa. Everything comes from `BIM_CARBON_CONTEXT`.
+
+---
+
+## 3. Phase-Based Visibility: What User Sees When
+
+### Before Analysis (IDLE / PARSING / GAP_DETECTED / CALCULATING)
+
+**Dashboard (Left):**
+- ❌ Hidden or skeleton shell (maintains orientation, shows "Processando...")
+
+**Agent (Right):**
+- ✅ Full-width conversation (100% width)
+- Shows:
+  - "Upload IFC" instructions
+  - Ingestion progress ("Lendo geometria IFC...")
+  - Gap cards ("Confirmamos uso do Grid Brasileiro (SIN)?")
+  - Calculation progress ("Executando cálculos de carbono...")
+
+**Interaction:** Chat is the *only* interaction surface; user talks to agent to get through ingestion.
+
+**Pattern:** Similar to Autodesk Insight's flow—first upload/run analysis, then land on dashboard.
+
+### After Analysis (INSIGHT_MODE)
+
+**Dashboard (Left):**
+- ✅ Visible (60% width, slides in from left)
+- Shows all sections populated from `BIM_CARBON_CONTEXT`:
+  - Project header + scenario selector
+  - KPIs (reflecting `activeScenarioId`)
+  - Comparison charts (baseline vs active scenario)
+  - Breakdown panels
+  - Benchmarks
+  - Scenario explorer
+
+**Agent (Right):**
+- ✅ Visible (40% width, pinned to same project)
+- Shows:
+  - BIM summary card (wall/window counts, etc.)
+  - Methodology card (Verra, GHG scopes, grid)
+  - Conversation history (ingestion messages, gap confirmations)
+  - Chat composer (with context-aware suggestions)
+
+**Interaction:** Dual-pane mode—user can explore dashboard OR chat, both stay in sync via shared state.
+
+---
+
+## 4. UI Interaction Model: Dashboard ↔ Chat Bidirectional Flow
+
+### Mode 1: Dashboard-Driven (User Explores Dashboard)
 ```
 User selects scenario in dropdown
   ↓
-setActiveScenarioId(newId)
+setActiveScenarioId(newId)  // Updates global state
   ↓
-Dashboard recomputes (all sections update)
+Dashboard recomputes (all sections update immediately):
+  - KPI row: numbers switch to new scenario
+  - Comparison chart: scenario bar updates
+  - Benchmark panel: marker moves to new intensity
+  - Scenario Explorer: active card highlighted
   ↓
 activeScenarioId stored in localStorage
   ↓
-Chat context updates (but chat doesn't auto-respond)
+Chat receives activeScenarioId in next /api/chat call
   ↓
-Next chat query automatically uses new scenario
+LLM can reference the new scenario:
+  "No cenário *Concreto baixo clínquer*, sua intensidade cai 
+   para 230 kgCO₂e/m², ~18,6% abaixo da linha de base — você 
+   vê isso no cartão principal de intensidade."
 ```
 
 **Behavior:**
-- User switches scenarios → Dashboard updates immediately
+- User switches scenarios → Dashboard updates immediately (all sections reactive)
 - Chat remains passive (no automatic response)
 - Next chat message will reference the newly selected scenario
 - Visual indicator in chat: "Cenário ativo: Concreto baixo clínquer" (subtle badge)
 
-#### Mode 2: Chat-Driven (User Asks About Scenario)
+**Pattern:** Same as Insight's scenario comparison and Power BI Copilot's knowledge of currently-filtered visuals.
+
+#### Mode 2: Chat-Driven Navigation (Agent Can Drive Dashboard)
+
+**A. Chat Queries Dashboard State**
 ```
 User types: "Compare o cenário concreto baixo clínquer com a baseline"
   ↓
@@ -89,56 +174,121 @@ LLM analyzes using BIM_CARBON_CONTEXT + activeScenarioId
   ↓
 LLM response includes: scenario comparison, numbers, insights
   ↓
-[Optional] Dashboard could highlight scenario if LLM mentions it
+Dashboard stays current (doesn't auto-switch unless explicitly requested)
+```
+
+**B. Chat Triggers Dashboard Changes (Optional, v2+)**
+```
+User asks: "Ativa o cenário de lajes mais leves e me mostra o impacto"
+  ↓
+LLM processes request + returns:
+  - Text response explaining the scenario
+  - JSON payload: { "setActiveScenarioId": "lighter_slab_plus_window_optimization" }
+  ↓
+Frontend intercepts payload → calls setActiveScenarioId(...)
+  ↓
+Dashboard updates to show new scenario
+  ↓
+Chat shows follow-up explanation referencing the newly activated scenario
 ```
 
 **Behavior:**
 - Chat handles scenario-specific queries using context
-- Dashboard remains in current state (doesn't auto-switch)
-- If user says "mostre o cenário X", consider adding "switch scenario" action button in chat response
+- Dashboard can be driven by chat actions (Power BI Copilot pattern)
+- Creates seamless "chat with your data & return visuals" loop
 
-#### Mode 3: Hybrid (Chat Suggests, Dashboard Reflects)
+**Pattern:** Mirrors Microsoft's Copilot in Power BI—queries update the view, view backs the explanation.
+
+#### Mode 3: Micro-CTAs (Dashboard Elements → Chat Questions)
+
+**Pattern: Click dashboard element → Pre-fill chat query**
+
+**Example: In "Onde está o carbono?" Breakdown Panel**
+
 ```
-Chat suggests: "Quer ver o impacto do cenário 'Lajes mais leves'?"
+Row shows: "Concreto estrutural – 78% das emissões"
   ↓
-User clicks suggestion in chat
+Small link next to row: "Perguntar para o agente"
   ↓
-setActiveScenarioId('lighter_slab_plus_window_optimization')
+User clicks link
   ↓
-Dashboard updates to show new scenario
+Chat composer pre-fills:
+  "Explique em PT-BR por que o concreto estrutural responde 
+   por 78% das emissões no cenário atual e quais estratégias 
+   de redução fazem mais sentido."
   ↓
-Chat sends follow-up query: "Explique o cenário 'Lajes mais leves'"
+Message includes:
+  - activeScenarioId (current scenario)
+  - categoryId: "structural_concrete"
+  ↓
+User sends → LLM answers with context from that specific category
 ```
+
+**Where to Add Micro-CTAs:**
+- Breakdown table rows (ask about specific category)
+- Benchmark panel (ask "Como melhorar minha posição?")
+- Scenario cards (ask "Explique este cenário")
+- KPI cards (ask "Como reduzir este valor?")
 
 **Behavior:**
-- Chat can trigger dashboard scenario changes via clickable suggestions
-- Creates seamless flow between chat exploration and visual exploration
+- Dashboard elements become "chat triggers"
+- Creates contextual, targeted queries
+- Mimics Power BI Copilot's "associate visual with trigger phrases"
 
-### State Synchronization
+**Pattern:** Power BI Copilot pattern—clicking something on the report leads to targeted chat about that same visual.
 
-**State Management:**
+### State Synchronization Implementation
+
+**Recommended: React Context for Global State**
 ```typescript
-// Top-level state in App.tsx
-const [activeScenarioId, setActiveScenarioId] = useState<string>(
-  () => localStorage.getItem('activeScenarioId') || 'baseline_current_design'
-);
+// contexts/DashboardContext.tsx
+interface DashboardContextType {
+  appPhase: AppState;
+  setAppPhase: (phase: AppState) => void;
+  bimContext: typeof BIM_CARBON_CONTEXT | null;
+  setBimContext: (context: typeof BIM_CARBON_CONTEXT) => void;
+  activeScenarioId: string;
+  setActiveScenarioId: (id: string) => void;
+}
 
-// Sync to localStorage
+// App.tsx wraps everything
+<DashboardProvider>
+  <App />
+</DashboardProvider>
+
+// Components consume
+const { activeScenarioId, setActiveScenarioId, bimContext } = useDashboardContext();
+```
+
+**Alternative: Zustand Store (Simpler)**
+```typescript
+// stores/dashboardStore.ts
+interface DashboardStore {
+  appPhase: AppState;
+  bimContext: typeof BIM_CARBON_CONTEXT | null;
+  activeScenarioId: string;
+  setAppPhase: (phase: AppState) => void;
+  setBimContext: (context: typeof BIM_CARBON_CONTEXT) => void;
+  setActiveScenarioId: (id: string) => void;
+}
+
+// Components consume
+const { activeScenarioId, setActiveScenarioId } = useDashboardStore();
+```
+
+**Persistence:**
+```typescript
+// Sync activeScenarioId to localStorage
 useEffect(() => {
   localStorage.setItem('activeScenarioId', activeScenarioId);
 }, [activeScenarioId]);
-
-// Dashboard reads state
-<DashboardPanel 
-  activeScenarioId={activeScenarioId}
-  onScenarioChange={setActiveScenarioId}
-/>
-
-// Chat receives state
-<ChatPanel 
-  activeScenarioId={activeScenarioId}
-/>
 ```
+
+**Benefits:**
+- Single source of truth
+- Easy to add debugging (log all state changes)
+- Easy to add undo/redo later
+- Both dashboard and chat read from same store
 
 **Chat Context Injection (Server-Side):**
 ```javascript
@@ -148,15 +298,39 @@ const enhancedContext = {
   active_scenario_id: req.body.activeScenarioId || 'baseline_current_design',
   active_scenario: BIM_CARBON_CONTEXT.scenarios.scenarios.find(
     s => s.id === req.body.activeScenarioId
-  )
+  ),
+  // Include categoryId if coming from micro-CTA
+  category_context: req.body.categoryId || null
 };
 
-// Send via tools/input_json if available, or structured system prompt
-systemInstruction: `
-  ...
-  ACTIVE_SCENARIO: ${JSON.stringify(enhancedContext.active_scenario, null, 2)}
-  ...
-`
+// Prefer tools/input_json if API supports it (keeps system prompt small)
+if (apiSupportsTools) {
+  requestBody = {
+    systemPrompt: "You are Bonde Studio Carbon AI. All numeric values must come from BIM_CARBON_CONTEXT. Rules: {...}",
+    inputData: enhancedContext
+  };
+} else {
+  // Fallback: structured system prompt
+  systemInstruction: `
+    ...
+    ACTIVE_SCENARIO: ${JSON.stringify(enhancedContext.active_scenario, null, 2)}
+    CATEGORY_CONTEXT: ${req.body.categoryId || 'none'}
+    ...
+  `
+}
+```
+
+**Frontend Chat Request:**
+```typescript
+const response = await fetch('/api/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ 
+    message: textToSend,
+    activeScenarioId: activeScenarioId, // Always include
+    categoryId: categoryId || null      // If from micro-CTA
+  }),
+});
 ```
 
 ---
@@ -695,13 +869,49 @@ activeScenarioId (state)
 └→ localStorage (persists state, survives refresh)
 ```
 
+### The "Right Things" Contract: What Shows Where
+
+**Guarantee:** Every number/claim in chat exists on dashboard, and vice versa.
+
+#### Header + KPI Row
+- Always reflect `activeScenarioId`:
+  - `Total tCO₂e` = `SCENARIOS[active].total_kgco2e / 1000`
+  - `Intensidade` = `SCENARIOS[active].intensity_kgco2e_per_m2`
+  - Benchmark badge uses `BENCHMARKS.distribution` and `BENCHMARKS.targets`
+- Agent can say "Você está abaixo da meta 2030" and UI visually agrees
+
+#### Emissions Comparison
+- Shows baseline vs active scenario (optionally "best scenario")
+- Metric toggle (tCO₂e / kg/m² / kg/m²·ano) re-scales but always uses `BIM_CARBON_CONTEXT` values
+- Agent mentions same numbers visible in chart
+
+#### Breakdown by System
+- Uses `CARBON_BASELINE.by_category` plus scenario deltas
+- `REDUCTION_STRATEGIES` provides "what to do" column
+- Agent reuses same entries for advice (consistent copy across chart + chat)
+- Micro-CTAs on rows trigger category-specific chat queries
+
+#### Benchmarks & Embodied vs Operational
+- Benchmark panel: Marker position = intensity on KPI card = value referenced by agent
+- Embodied vs operational: Uses `CARBON_BASELINE.total_embodied_kgco2e` + `OPERATIONAL_CARBON.total_operational_kgco2e_lifetime_current_grid`
+- Agent mentions ratio (e.g. "incorporado ~24% do total") → **visible** in that chart
+
+#### Data Quality & BIM Integration
+- `DATA_QUALITY.coverage` drives:
+  - "Qualidade dos dados" KPI badge
+  - Tooltips in charts where coverage incomplete
+- `IFC_WRITEBACK` appears as descriptive text + export info
+- Agent can reference when user asks "Como isso volta para o meu modelo BIM?"
+
 ### Key Insight
 
-**The dashboard and chat are two views of the same state:**
-- **Dashboard** = Visual exploration tool (charts, comparisons, benchmarks)
-- **Chat** = Conversational exploration tool (explanations, what-ifs, detailed analysis)
+**The dashboard and chat are two faces of one brain:**
+- **Dashboard** = Visual exploration tool (charts, comparisons, benchmarks, scenario switching)
+- **Chat** = Conversational exploration tool (explanations, what-ifs, detailed analysis, narrative)
 
-Both read from `activeScenarioId` and `BIM_CARBON_CONTEXT`, ensuring consistency while allowing independent interaction patterns.
+Both read/write the same state (`activeScenarioId`, `bimContext`, `appPhase`), ensuring perfect synchronization. When you switch anything on one side, the other side "just knows" and stays visually and verbally aligned.
+
+**Pattern:** Mirrors Power BI Copilot + Autodesk Insight—dashboard is the stable cockpit, chat is the narrative and action surface, both backed by explicit documented assumptions.
 
 ---
 
